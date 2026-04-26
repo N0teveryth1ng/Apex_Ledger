@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Apex Ledger - Home</title>
+    <style>
+        body { font-family: sans-serif; max-width: 500px; margin: 50px auto; line-height: 1.6; }
+        .card { border: 1px solid #ccc; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+        input { width: 100%; padding: 8px; margin: 10px 0; box-sizing: border-box; }
+        button { background: #2ecc71; color: white; border: none; padding: 10px 20px; cursor: pointer; width: 100%; }
+        button:hover { background: #27ae60; }
+    </style>
+</head>
+<body>
+
+    <h1>Apex Ledger</h1>
+
+    <div class="card">
+        <h3>Step 1: Create Account</h3>
+        <p>This adds you to the Postgres DB with a ₹5000 starting balance.</p>
+        <form action="/create-user" method="post">
+            <input type="text" name="username" placeholder="Choose a Username" required>
+            <button type="submit">Create Account</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <h3>Step 2: Access Wallet</h3>
+        <p>Enter your username to see your balance and transfer money.</p>
+        <form action="/login" method="post">
+            <input type="text" name="username" placeholder="Enter Username" required>
+            <button type="submit" style="background: #3498db;">Go to Wallet</button>
+        </form>
+    </div>
+
+</body>
+</html>

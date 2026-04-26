@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>My Wallet - Apex Ledger</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 40px auto; background-color: #f4f7f6; color: #333; }
+        .wallet-card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .balance-box { background: #2c3e50; color: #ecf0f1; padding: 20px; border-radius: 8px; text-align: center; margin-bottom: 30px; }
+        .balance-amount { font-size: 2.5em; font-weight: bold; display: block; }
+        
+        .transfer-section { border-top: 2px solid #eee; padding-top: 20px; }
+        input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; font-size: 1em; }
+        button { background: #e67e22; color: white; border: none; padding: 15px; border-radius: 6px; cursor: pointer; width: 100%; font-size: 1.1em; font-weight: bold; transition: background 0.3s; }
+        button:hover { background: #d35400; }
+        .back-link { display: block; text-align: center; margin-top: 20px; color: #7f8c8d; text-decoration: none; }
+    </style>
+</head>
+<body>
+
+    <div class="wallet-card">
+        <h2>Welcome, {{ username }}</h2>
+        
+        <div class="balance-box">
+            <span style="text-transform: uppercase; letter-spacing: 1px; font-size: 0.8em;">Available Balance</span>
+            <span class="balance-amount">₹{{ balance }}</span>
+        </div>
+
+        <div class="transfer-section">
+            <h3>Send Money</h3>
+            <p style="font-size: 0.9em; color: #666;">Transfer funds instantly to another user.</p>
+            
+            <form action="/transfer" method="post">
+                <input type="hidden" name="sender_username" value="{{ username }}">
+                
+                <label for="receiver">Receiver Username:</label>
+                <input type="text" id="receiver" name="receiver_username" placeholder="e.g. simon_dev" required>
+                
+                <label for="amount">Amount (₹):</label>
+                <input type="number" id="amount" name="amount" min="1" step="0.01" placeholder="0.00" required>
+                
+                <button type="submit">Confirm Transfer</button>
+            </form>
+        </div>
+
+        <a href="/" class="back-link">← Logout</a>
+    </div>
+
+</body>
+</html>
