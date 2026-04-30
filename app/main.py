@@ -104,6 +104,25 @@ def send_money(request: Request, sender_username: str = Form(...), receiver_user
                 <script>alert("Amount must be at least or more than ₹10"); window.location="/wallet?username={sender_username}";</script>
             """)
 
+
+
+
+        # platform fee charges 
+        platform_fee = amount * 0.015
+        total_deduction = amount + platform_fee
+
+        if total_deduction > current_bal:
+            return {"error": f"insufficient balance. Need ₹{total_deduction} (Amount: ₹{amount} + Fee: ₹{platform_fee})"}
+
+        cur.execute("""
+            INSERT INTO platform_fee (sender_username, receiver_username, fee_amount, original_amount)
+            VALUES (%s, %s, %s, %s)
+        """, (sender_username, receiver_username, platform_fee, amount))
+        
+        print(f"DEBUG: Platform fee Transfer committed")
+
+
+
         # Check receiver exists
         cur.execute("SELECT 1 FROM user_details WHERE username = %s", (receiver_username,))
         if not cur.fetchone():
