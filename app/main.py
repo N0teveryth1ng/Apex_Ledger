@@ -98,6 +98,12 @@ def send_money(request: Request, sender_username: str = Form(...), receiver_user
         if amount > current_bal:
             return {"error": f"Limit exceeded. Balance: {current_bal}, Amount: {amount}"}
         
+        # minimum balance prevention ($10) 
+        if amount < 10:
+            return HTMLResponse(f"""
+                <script>alert("Amount must be at least or more than ₹10"); window.location="/wallet?username={sender_username}";</script>
+            """)
+
         # Check receiver exists
         cur.execute("SELECT 1 FROM user_details WHERE username = %s", (receiver_username,))
         if not cur.fetchone():
@@ -106,6 +112,13 @@ def send_money(request: Request, sender_username: str = Form(...), receiver_user
         # Update balances
         cur.execute("UPDATE user_details SET balance = balance - %s WHERE username = %s", (amount, sender_username))
         cur.execute("UPDATE user_details SET balance = balance + %s WHERE username = %s", (amount, receiver_username))
+        
+        # records in the transactions 
+        cur.execute("""
+            INSERT INTO transactions (sender_username, receiver_username, amount)
+            VALUES (%s, %s, %s)
+        """, (sender_username, receiver_username, amount))
+        
         conn.commit()
         print(f"DEBUG: Transfer committed")
     
