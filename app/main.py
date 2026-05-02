@@ -7,9 +7,13 @@ import psycopg2
 from contextlib import contextmanager, redirect_stderr
 from fastapi import FastAPI, Request, HTTPException, Form
 
+import redis
+
+
+
+
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
-
 
 
 
@@ -23,6 +27,17 @@ DB_CONFIG = {
     "user":"neondb_owner",
     "password":"npg_MVRjdOQ29ElK"
 }
+
+
+
+# redis Cloud:
+r = redis.Redis(
+    host='redis-13392.c270.us-east-1-3.ec2.cloud.redislabs.com',
+    port=13392,
+    decode_responses=True,
+    username="default",
+    password="BmzKHwW18rDm5z09Ekm4yVtADjNtJ4QG",
+)
 
 
 # # DB connection manager 
@@ -62,15 +77,27 @@ def home(request: Request):
 @app.get("/wallet", response_class=HTMLResponse)
 def wallet_page(request: Request, username: str = "Wrick"):
     
-    with get_db_connection() as conn:
-        cur = conn.cursor() 
-        cur.execute("SELECT balance FROM user_details WHERE username = %s", (username,))
-        result = cur.fetchone()
-
-        if not result:
-            return {"error": f"User '{username}' not found in database"}
-        balance = result[0]
-   
+    # Try Redis cache first
+    cached_bal = r.get(f"balance:{username}")
+    
+    if cached_bal:
+        print(f"DEBUG: Cache hit for {username}")
+        balance = float(cached_bal)
+    else:
+        print(f"DEBUG: Cache miss for {username} - querying DB")
+        with get_db_connection() as conn:
+            cur = conn.cursor() 
+            cur.execute("SELECT balance FROM user_details WHERE username = %s", (username,))
+            result = cur.fetchone()
+    
+            if not result:
+                return {"error": f"User '{username}' not found in database"}
+            balance = result[0]
+            
+        # Save to Redis cache for 60 seconds
+        r.setex(f"balance:{username}", 60, str(balance))
+        print(f"DEBUG: Saved {username} balance to cache: {balance}")
+    
     return templates.TemplateResponse(
         "user.html",
         {"request": request, "username": username, "balance": balance}
@@ -203,16 +230,32 @@ def login_user(request: Request, username: str = Form(...)):
 # ranks users based on their amount balance
 @app.get("/rank")
 def ranking(request: Request):
-
-    with get_db_connection() as conn:
-        cur = conn.cursor()
-
-        cur.execute("SELECT username, balance FROM user_details ORDER BY balance DESC;")
-        res = cur.fetchall()
-
-        if not res:
-           print(f"details not found") 
-
+    
+    # Try cache first - key is "rankings" (same for all users)
+    cached_rankings = r.get("rankings")
+    
+    if cached_rankings:
+        print("DEBUG: Cache hit for rankings")
+        import json
+        res = json.loads(cached_rankings)
+    else:
+        print("DEBUG: Cache miss for rankings - querying DB")
+        with get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT username, balance FROM user_details ORDER BY balance DESC;")
+            res = cur.fetchall()
+            
+            if not res:
+                print(f"DEBUG: No rankings found")
+        
+        
+        # Save to cache for 5 minutes 
+        import json
+        # Convert tuples with Decimals to lists with floats for JSON
+        rankings_list = [[row[0], float(row[1])] for row in res]
+        r.setex("rankings", 300, json.dumps(rankings_list))
+        print(f"DEBUG: Saved rankings to cache")
+    
     return templates.TemplateResponse("rank.html", {"request": request, "rankings": res})
 
 
