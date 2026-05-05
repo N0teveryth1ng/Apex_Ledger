@@ -15,6 +15,10 @@ import redis
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
 
+# Include login routes
+from .login import router as login_router
+app.include_router(login_router)
+
 
 
 #  -------------------  add postgres DB connection ------------------- 
@@ -73,9 +77,31 @@ def home(request: Request):
 
 
 
+# JWT verification helper
+from jose import jwt, JWTError
+
+SECRET_KEY = "CHANGE_ME_IN_PRODUCTION"
+ALGORITHM = "HS256"
+
+def get_current_user(request: Request):
+    token = request.cookies.get("access_token")
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload.get("sub")
+    except JWTError:
+        return None
+
+        
+
 # send money (user.html) page
 @app.get("/wallet", response_class=HTMLResponse)
-def wallet_page(request: Request, username: str = "Wrick"):
+def wallet_page(request: Request):
+    # Get username from JWT cookie, NOT from URL!
+    username = get_current_user(request)
+    if not username:
+        return RedirectResponse(url="/login", status_code=303)
     
     # Try Redis cache first
     cached_bal = r.get(f"balance:{username}")
@@ -91,7 +117,7 @@ def wallet_page(request: Request, username: str = "Wrick"):
             result = cur.fetchone()
     
             if not result:
-                return {"error": f"User '{username}' not found in database"}
+                return HTMLResponse(f"<h1>Error: User '{username}' not found in database</h1><a href='/signup'>Sign up here</a>")
             balance = result[0]
             
         # Save to Redis cache for 60 seconds
@@ -108,65 +134,74 @@ def wallet_page(request: Request, username: str = "Wrick"):
 
 # money transfer logic 
 @app.post("/transfer", response_class=HTMLResponse)
-def send_money(request: Request, sender_username: str = Form(...), receiver_username: str = Form(...), amount: float = Form(...)):
+def send_money(request: Request, receiver_username: str = Form(...), amount: float = Form(...)):
+    # Get sender from JWT (secure), NOT from form (prevent spoofing)
+    sender_username = get_current_user(request)
+    if not sender_username:
+        return RedirectResponse(url="/login", status_code=303)
+    
     print(f"DEBUG: Transfer {amount} from '{sender_username}' to '{receiver_username}'")
     
     with get_db_connection() as conn:
         cur = conn.cursor()
         
-        cur.execute("SELECT balance FROM user_details WHERE username = %s", (sender_username,))
-        result = cur.fetchone()
-        print(f"DEBUG: Sender balance = {result}")
-        if not result:
-            return {"error": f"Sender '{sender_username}' not found"}
-        current_bal = result[0]
-        
-        # if current bal < amt we're sending then it will not transfer 
-        if amount > current_bal:
-            return {"error": f"Limit exceeded. Balance: {current_bal}, Amount: {amount}"}
-        
-        # minimum balance prevention ($10) 
-        if amount < 10:
-            return HTMLResponse(f"""
-                <script>alert("Amount must be at least or more than ₹10"); window.location="/wallet?username={sender_username}";</script>
-            """)
+        try:
+            # Validate sender
+            cur.execute("SELECT balance FROM user_details WHERE username = %s", (sender_username,))
+            result = cur.fetchone()
+            print(f"DEBUG: Sender balance = {result}")
+            if not result:
+                return {"error": f"Sender '{sender_username}' not found"}
+            current_bal = result[0]
+            
+            if amount > current_bal:
+                return {"error": f"Limit exceeded. Balance: {current_bal}, Amount: {amount}"}
+            
+            if amount < 10:
+                return HTMLResponse(f"""
+                    <script>alert("Amount must be at least or more than ₹10"); window.location="/wallet?username={sender_username}";</script>
+                """)
 
+            # Platform fee
+            platform_fee = amount * 0.015
+            total_deduction = amount + platform_fee
 
+            if total_deduction > current_bal:
+                return {"error": f"insufficient balance. Need ₹{total_deduction} (Amount: ₹{amount} + Fee: ₹{platform_fee})"}
 
+            cur.execute("""
+                INSERT INTO platform_fee (sender_username, receiver_username, fee_amount, original_amount)
+                VALUES (%s, %s, %s, %s)
+            """, (sender_username, receiver_username, platform_fee, amount))
+            
+            print(f"DEBUG: Platform fee recorded")
 
-        # platform fee charges 
-        platform_fee = amount * 0.015
-        total_deduction = amount + platform_fee
-
-        if total_deduction > current_bal:
-            return {"error": f"insufficient balance. Need ₹{total_deduction} (Amount: ₹{amount} + Fee: ₹{platform_fee})"}
-
-        cur.execute("""
-            INSERT INTO platform_fee (sender_username, receiver_username, fee_amount, original_amount)
-            VALUES (%s, %s, %s, %s)
-        """, (sender_username, receiver_username, platform_fee, amount))
-        
-        print(f"DEBUG: Platform fee Transfer committed")
-
-
-
-        # Check receiver exists
-        cur.execute("SELECT 1 FROM user_details WHERE username = %s", (receiver_username,))
-        if not cur.fetchone():
-            return {"error": f"Receiver '{receiver_username}' not found"}
-        
-        # Update balances
-        cur.execute("UPDATE user_details SET balance = balance - %s WHERE username = %s", (amount, sender_username))
-        cur.execute("UPDATE user_details SET balance = balance + %s WHERE username = %s", (amount, receiver_username))
-        
-        # records in the transactions 
-        cur.execute("""
-            INSERT INTO transactions (sender_username, receiver_username, amount)
-            VALUES (%s, %s, %s)
-        """, (sender_username, receiver_username, amount))
-        
-        conn.commit()
-        print(f"DEBUG: Transfer committed")
+            # Check receiver
+            cur.execute("SELECT 1 FROM user_details WHERE username = %s", (receiver_username,))
+            if not cur.fetchone():
+                return {"error": f"Receiver '{receiver_username}' not found"}
+            
+            # Update balances
+            cur.execute("UPDATE user_details SET balance = balance - %s WHERE username = %s", (amount, sender_username))
+            cur.execute("UPDATE user_details SET balance = balance + %s WHERE username = %s", (amount, receiver_username))
+            
+            # Record transaction
+            cur.execute("""
+                INSERT INTO transactions (sender_username, receiver_username, amount)
+                VALUES (%s, %s, %s)
+            """, (sender_username, receiver_username, amount))
+            
+            conn.commit()
+            print(f"DEBUG: Transfer committed")
+            
+            # Clear Redis cache
+            r.delete(f"balance:{sender_username}")
+            r.delete(f"balance:{receiver_username}")
+            
+        except Exception as e:
+            conn.rollback()
+            print(f"DEBUG: Transfer failed, rolled back: {e}")
+            return {"error": f"Transfer failed: {str(e)}"}
     
     return RedirectResponse(url=f"/wallet?username={sender_username}", status_code=303)
     

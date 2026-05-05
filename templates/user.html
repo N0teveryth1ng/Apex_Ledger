@@ -31,8 +31,6 @@
             <p style="font-size: 0.9em; color: #666;">Transfer funds instantly to another user.</p>
             
             <form action="/transfer" method="post">
-                <input type="hidden" name="sender_username" value="{{ username }}">
-                
                 <label for="receiver">Receiver Username:</label>
                 <input type="text" id="receiver" name="receiver_username" placeholder="e.g. simon_dev" required>
                 
