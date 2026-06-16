@@ -1,7 +1,11 @@
-fastapi
+fastapi==0.115.12
 uvicorn
 jinja2
 psycopg2-binary
-
-
-
+redis
+python-dotenv
+python-jose[cryptography]
+passlib[bcrypt]
+bcrypt==3.2.2
+python-multipart
+starlette==0.46.2

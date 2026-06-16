@@ -1,15 +1,17 @@
-from locale import currency
-from re import template
-from fastapi.routing import request_response
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, RedirectResponse
 import psycopg2
-from contextlib import contextmanager, redirect_stderr
-from fastapi import FastAPI, Request, HTTPException, Form
+from contextlib import contextmanager
+from fastapi import FastAPI, Request, Form
 
 import redis
+import time
+from typing import Any
+from dotenv import load_dotenv
+import os
 
-
+# Load environment variables
+load_dotenv()
 
 
 app = FastAPI()
@@ -25,23 +27,42 @@ app.include_router(login_router)
 
 # # schema DB config
 DB_CONFIG = {
-    "host":"ep-aged-moon-amjeqez7-pooler.c-5.us-east-1.aws.neon.tech",
-    "database":"neondb",
-    "port":"5432",
-    "user":"neondb_owner",
-    "password":"npg_MVRjdOQ29ElK"
+    "host": os.getenv("DB_HOST"),
+    "database": os.getenv("DB_NAME"),
+    "port": os.getenv("DB_PORT", "5432"),
+    "user": os.getenv("DB_USER"),
+    "password": os.getenv("DB_PASSWORD"),
 }
 
 
 
 # redis Cloud:
 r = redis.Redis(
-    host='redis-13392.c270.us-east-1-3.ec2.cloud.redislabs.com',
-    port=13392,
+    host=os.getenv("REDIS_HOST"),
+    port=int(os.getenv("REDIS_PORT", "6379")),
     decode_responses=True,
-    username="default",
-    password="BmzKHwW18rDm5z09Ekm4yVtADjNtJ4QG",
+    username=os.getenv("REDIS_USERNAME", "default"),
+    password=os.getenv("REDIS_PASSWORD"),
+    socket_connect_timeout=0.2,
+    socket_timeout=0.2
 )
+
+_redis_ok = True
+_redis_last_fail = 0.0
+_REDIS_COOLDOWN = 30
+
+def rc(fn, *args, **kwargs) -> Any:
+    global _redis_ok, _redis_last_fail
+    if not _redis_ok and time.time() - _redis_last_fail < _REDIS_COOLDOWN:
+        return None
+    try:
+        result = fn(*args, **kwargs)
+        _redis_ok = True
+        return result
+    except Exception:
+        _redis_ok = False
+        _redis_last_fail = time.time()
+        return None
 
 
 # # DB connection manager 
@@ -80,7 +101,7 @@ def home(request: Request):
 # JWT verification helper
 from jose import jwt, JWTError
 
-SECRET_KEY = "CHANGE_ME_IN_PRODUCTION"
+SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")
 ALGORITHM = "HS256"
 
 def get_current_user(request: Request):
@@ -93,7 +114,7 @@ def get_current_user(request: Request):
     except JWTError:
         return None
 
-        
+# Rate limiter disabled for tests - re-enable with: from slowapi import Limiter
 
 # send money (user.html) page
 @app.get("/wallet", response_class=HTMLResponse)
@@ -104,29 +125,31 @@ def wallet_page(request: Request):
         return RedirectResponse(url="/login", status_code=303)
     
     # Try Redis cache first
-    cached_bal = r.get(f"balance:{username}")
-    
+    cached_bal = rc(r.get, f"balance:{username}")
     if cached_bal:
         print(f"DEBUG: Cache hit for {username}")
         balance = float(cached_bal)
     else:
         print(f"DEBUG: Cache miss for {username} - querying DB")
         with get_db_connection() as conn:
-            cur = conn.cursor() 
+            cur = conn.cursor()
             cur.execute("SELECT balance FROM user_details WHERE username = %s", (username,))
             result = cur.fetchone()
-    
+
             if not result:
                 return HTMLResponse(f"<h1>Error: User '{username}' not found in database</h1><a href='/signup'>Sign up here</a>")
             balance = result[0]
-            
-        # Save to Redis cache for 60 seconds
-        r.setex(f"balance:{username}", 60, str(balance))
-        print(f"DEBUG: Saved {username} balance to cache: {balance}")
+
+        rc(r.setex, f"balance:{username}", 60, str(balance))
+
+    # Generate idempotency key to prevent double-clicks
+    import uuid
+    idempotency_key = str(uuid.uuid4())
+    rc(r.setex, f"idempotency:{idempotency_key}", 300, "unused")
     
     return templates.TemplateResponse(
         "user.html",
-        {"request": request, "username": username, "balance": balance}
+        {"request": request, "username": username, "balance": balance, "idempotency_key": idempotency_key}
     )
 
 
@@ -134,11 +157,16 @@ def wallet_page(request: Request):
 
 # money transfer logic 
 @app.post("/transfer", response_class=HTMLResponse)
-def send_money(request: Request, receiver_username: str = Form(...), amount: float = Form(...)):
+def send_money(request: Request, receiver_username: str = Form(...), amount: float = Form(...), idempotency_key: str = Form(...)):
     # Get sender from JWT (secure), NOT from form (prevent spoofing)
     sender_username = get_current_user(request)
     if not sender_username:
         return RedirectResponse(url="/login", status_code=303)
+    
+    # Check idempotency key - prevent double-clicks
+    if rc(r.get, f"idempotency:{idempotency_key}") == "used":
+        return HTMLResponse(f"<h1>Error</h1><p>Transfer already processed. Please check your balance.</p><a href='/wallet'>Go to Wallet</a>")
+    rc(r.set, f"idempotency:{idempotency_key}", "used", ex=300)
     
     print(f"DEBUG: Transfer {amount} from '{sender_username}' to '{receiver_username}'")
     
@@ -151,11 +179,11 @@ def send_money(request: Request, receiver_username: str = Form(...), amount: flo
             result = cur.fetchone()
             print(f"DEBUG: Sender balance = {result}")
             if not result:
-                return {"error": f"Sender '{sender_username}' not found"}
+                return HTMLResponse(f"<h1>Error</h1><p>Sender '{sender_username}' not found</p><a href='/wallet'>Back to Wallet</a>")
             current_bal = result[0]
             
             if amount > current_bal:
-                return {"error": f"Limit exceeded. Balance: {current_bal}, Amount: {amount}"}
+                return HTMLResponse(f"<h1>Error</h1><p>Limit exceeded. Balance: ₹{current_bal}, Amount: ₹{amount}</p><a href='/wallet'>Back to Wallet</a>")
             
             if amount < 10:
                 return HTMLResponse(f"""
@@ -167,7 +195,7 @@ def send_money(request: Request, receiver_username: str = Form(...), amount: flo
             total_deduction = amount + platform_fee
 
             if total_deduction > current_bal:
-                return {"error": f"insufficient balance. Need ₹{total_deduction} (Amount: ₹{amount} + Fee: ₹{platform_fee})"}
+                return HTMLResponse(f"<h1>Error</h1><p>Insufficient balance. Need ₹{total_deduction} (Amount: ₹{amount} + Fee: ₹{platform_fee})</p><a href='/wallet'>Back to Wallet</a>")
 
             cur.execute("""
                 INSERT INTO platform_fee (sender_username, receiver_username, fee_amount, original_amount)
@@ -179,7 +207,7 @@ def send_money(request: Request, receiver_username: str = Form(...), amount: flo
             # Check receiver
             cur.execute("SELECT 1 FROM user_details WHERE username = %s", (receiver_username,))
             if not cur.fetchone():
-                return {"error": f"Receiver '{receiver_username}' not found"}
+                return HTMLResponse(f"<h1>Error</h1><p>Receiver '{receiver_username}' not found</p><a href='/wallet'>Back to Wallet</a>")
             
             # Update balances
             cur.execute("UPDATE user_details SET balance = balance - %s WHERE username = %s", (amount, sender_username))
@@ -195,70 +223,15 @@ def send_money(request: Request, receiver_username: str = Form(...), amount: flo
             print(f"DEBUG: Transfer committed")
             
             # Clear Redis cache
-            r.delete(f"balance:{sender_username}")
-            r.delete(f"balance:{receiver_username}")
+            rc(r.delete, f"balance:{sender_username}")
+            rc(r.delete, f"balance:{receiver_username}")
             
         except Exception as e:
             conn.rollback()
             print(f"DEBUG: Transfer failed, rolled back: {e}")
-            return {"error": f"Transfer failed: {str(e)}"}
+            return HTMLResponse(f"<h1>Error</h1><p>Transfer failed: {str(e)}</p><a href='/wallet'>Back to Wallet</a>")
     
-    return RedirectResponse(url=f"/wallet?username={sender_username}", status_code=303)
-    
-
-
-
-
-
-# create new user
-@app.post("/create-user")
-def create_user(request: Request, username: str = Form(...)):
-    print(f"DEBUG: Creating user '{username}'")
-    
-    with get_db_connection() as conn:
-        cur = conn.cursor()
-        
-        # Check if user already exists
-        cur.execute("SELECT 1 FROM user_details WHERE username = %s", (username,))
-        result = cur.fetchone()
-        print(f"DEBUG: User exists check = {result}")
-        
-        if result:
-            print(f"DEBUG: User '{username}' already exists, redirecting to wallet")
-            return RedirectResponse(url=f"/wallet?username={username}", status_code=303)
-        
-        # Create new user
-        cur.execute("INSERT INTO user_details (username, password, balance) VALUES (%s, %s, %s)",
-                   (username, 'default123', DEFAULT_BALANCE))
-        conn.commit()
-        print(f"DEBUG: Created user '{username}' with balance {DEFAULT_BALANCE}")
-    
-    # Redirect to wallet
-    return RedirectResponse(url=f"/wallet?username={username}", status_code=303)
-
-
-
-
-# get the user details
-@app.post("/login")
-def login_user(request: Request, username: str = Form(...)):
-
-    with get_db_connection() as conn:
-        cur = conn.cursor()
-
-        # Check if user exists
-        cur.execute("SELECT balance FROM user_details WHERE username = %s", (username,))
-        result = cur.fetchone()
-
-        if not result:
-            # User not found - create new user with default balance
-            cur.execute("INSERT INTO user_details (username, password, balance) VALUES (%s, %s, %s)",
-                       (username, 'default123', DEFAULT_BALANCE))
-            conn.commit()
-            print(f"DEBUG: Created new user '{username}' with balance {DEFAULT_BALANCE}")
-
-    # Redirect to wallet page
-    return RedirectResponse(url=f"/wallet?username={username}", status_code=303)
+    return RedirectResponse(url="/wallet", status_code=303)
 
 
 
@@ -267,35 +240,39 @@ def login_user(request: Request, username: str = Form(...)):
 def ranking(request: Request):
     
     # Try cache first - key is "rankings" (same for all users)
-    cached_rankings = r.get("rankings")
-    
+    import json
+    cached_rankings = rc(r.get, "rankings")
     if cached_rankings:
         print("DEBUG: Cache hit for rankings")
-        import json
         res = json.loads(cached_rankings)
     else:
+        res = None
+
+    if res is None:
         print("DEBUG: Cache miss for rankings - querying DB")
         with get_db_connection() as conn:
             cur = conn.cursor()
             cur.execute("SELECT username, balance FROM user_details ORDER BY balance DESC;")
             res = cur.fetchall()
-            
+
             if not res:
                 print(f"DEBUG: No rankings found")
-        
-        
-        # Save to cache for 5 minutes 
-        import json
-        # Convert tuples with Decimals to lists with floats for JSON
-        rankings_list = [[row[0], float(row[1])] for row in res]
-        r.setex("rankings", 300, json.dumps(rankings_list))
-        print(f"DEBUG: Saved rankings to cache")
+
+        try:
+            rankings_list = [[row[0], float(row[1])] for row in res]
+            r.setex("rankings", 300, json.dumps(rankings_list))
+            print(f"DEBUG: Saved rankings to cache")
+        except Exception:
+            pass
     
     return templates.TemplateResponse("rank.html", {"request": request, "rankings": res})
 
 
 
-# routing for server running
-@app.get("/")
-async def root():
-    return {"message": "Hello WRICK from the backend server"}
+# Root route - landing page
+@app.get("/", response_class=HTMLResponse)
+def root(request: Request):
+    return templates.TemplateResponse(
+        "index.html", 
+        {"request": request, "name": "User"}
+    )

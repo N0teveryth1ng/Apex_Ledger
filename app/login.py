@@ -4,18 +4,23 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from datetime import datetime, timedelta, timezone
 from typing import Optional
-from jose import jwt, JWTError
+from jose import jwt
 from passlib.context import CryptContext
 import psycopg2
 from contextlib import contextmanager
+from dotenv import load_dotenv
+import os
+
+# Load environment variables
+load_dotenv()
 
 # Database config 
 DB_CONFIG = {
-    "host": "ep-aged-moon-amjeqez7-pooler.c-5.us-east-1.aws.neon.tech",
-    "database": "neondb",
-    "port": "5432",
-    "user": "neondb_owner",
-    "password": "npg_MVRjdOQ29ElK"
+    "host": os.getenv("DB_HOST"),
+    "database": os.getenv("DB_NAME"),
+    "port": os.getenv("DB_PORT", "5432"),
+    "user": os.getenv("DB_USER"),
+    "password": os.getenv("DB_PASSWORD"),
 }
 
 @contextmanager
@@ -51,7 +56,7 @@ def create_user_in_details(username: str, password: str = "default123", balance:
 
 
 
-SECRET_KEY = "CHANGE_ME_IN_PRODUCTION"          # Use an env var in real apps
+SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
@@ -68,11 +73,12 @@ templates = Jinja2Templates(directory="templates")
 # ------------------ auth -----------------------
 # hash password
 def hash_password(password: str):
-    return pwd_context.hash(password)
+    # bcrypt has 72 byte limit
+    return pwd_context.hash(password.encode('utf-8')[:72])
 
 # verify password
 def verify_password(plain: str, hashed: str):
-    return pwd_context.verify(plain, hashed)
+    return pwd_context.verify(plain.encode('utf-8')[:72], hashed)
 
 
 # ceate access token
