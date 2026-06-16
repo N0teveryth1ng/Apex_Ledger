@@ -30,7 +30,7 @@ Apex Ledger is a full-stack payment wallet application that allows users to regi
 
 ## Screenshots
 
-| Login | Wallet | Leaderboard |
+| Wallet | Leaderboard | Login |
 |-------|--------|-------------|
 | ![Login](https://github.com/user-attachments/assets/9c0c1a64-2e8c-4498-8278-a3deee58774d) | ![Wallet](https://github.com/user-attachments/assets/ef4ecc68-ac08-4bb1-88e0-0c5f9422221b) | ![Rank](https://github.com/user-attachments/assets/f366f73e-91ef-4f11-9eaa-a60f4270ae3f) |
 
