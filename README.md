@@ -38,64 +38,68 @@ Apex Ledger is a full-stack payment wallet application that allows users to regi
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                        Client                           │
-│                  (Browser / HTTP)                       │
-└────────────────────────┬────────────────────────────────┘
-                         │
-                         ▼
-┌─────────────────────────────────────────────────────────┐
-│                    FastAPI App                          │
-│                                                         │
-│   ┌─────────────┐        ┌──────────────────────────┐  │
-│   │  JWT Auth   │        │     Route Handlers        │  │
-│   │  Middleware │───────▶│  /login  /signup          │  │
-│   └─────────────┘        │  /wallet /transfer /rank  │  │
-│                          └──────────┬───────────────┬┘  │
-└─────────────────────────────────────┼───────────────┼───┘
-                                      │               │
-                    ┌─────────────────▼──┐    ┌───────▼──────────┐
-                    │   Redis Cache      │    │   PostgreSQL      │
-                    │   (Balance Cache)  │    │   (NeonDB)        │
-                    │   Circuit Breaker  │    │                   │
-                    │   TTL: 60s         │    │  users_cred       │
-                    └────────────────────┘    │  user_details     │
-                                              │  transactions     │
-                                              │  platform_fee     │
-                                              └───────────────────┘
+```mermaid
+graph TD
+    Client([Browser / Client])
+
+    Client -->|HTTP Request| FastAPI
+
+    subgraph FastAPI App
+        JWT[JWT Auth\nCookie Verification]
+        Routes[Route Handlers\n/login /signup\n/wallet /transfer /rank]
+        JWT --> Routes
+    end
+
+    Routes -->|Cache Read/Write| Redis
+    Routes -->|DB Queries| Postgres
+
+    subgraph Redis Cloud
+        Redis[Circuit Breaker\nBalance Cache TTL 60s\nIdempotency Keys TTL 300s]
+    end
+
+    subgraph NeonDB PostgreSQL
+        Postgres --> T1[(users_cred)]
+        Postgres --> T2[(user_details)]
+        Postgres --> T3[(transactions)]
+        Postgres --> T4[(platform_fee)]
+    end
 ```
 
 ---
 
-## Request Flow — Transfer
+## Transfer Request Flow
 
-```
-User submits transfer form
-        │
-        ▼
-JWT cookie verified → get sender username
-        │
-        ▼
-Idempotency key checked (Redis) → prevent double-clicks
-        │
-        ▼
-Sender balance validated (PostgreSQL)
-        │
-        ▼
-1.5% platform fee calculated and recorded
-        │
-        ▼
-Receiver existence verified
-        │
-        ▼
-Atomic balance update (sender - amount, receiver + amount)
-        │
-        ▼
-Transaction recorded → Redis cache invalidated
-        │
-        ▼
-Redirect to /wallet with updated balance
+```mermaid
+sequenceDiagram
+    actor User
+    participant FastAPI
+    participant Redis
+    participant PostgreSQL
+
+    User->>FastAPI: POST /transfer (form data)
+    FastAPI->>FastAPI: Decode JWT cookie → get sender
+    FastAPI->>Redis: Check idempotency key
+    Redis-->>FastAPI: unused / used / missing
+
+    alt key already used
+        FastAPI-->>User: Error - duplicate transfer
+    else key valid
+        FastAPI->>Redis: Mark key as used
+        FastAPI->>PostgreSQL: SELECT sender balance
+        PostgreSQL-->>FastAPI: balance
+
+        alt insufficient balance
+            FastAPI-->>User: Error - insufficient funds
+        else balance OK
+            FastAPI->>PostgreSQL: INSERT platform_fee
+            FastAPI->>PostgreSQL: SELECT receiver exists
+            FastAPI->>PostgreSQL: UPDATE balances (atomic)
+            FastAPI->>PostgreSQL: INSERT transaction record
+            FastAPI->>PostgreSQL: COMMIT
+            FastAPI->>Redis: DELETE cached balances
+            FastAPI-->>User: Redirect → /wallet
+        end
+    end
 ```
 
 ---
