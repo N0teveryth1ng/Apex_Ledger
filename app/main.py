@@ -179,57 +179,55 @@ def send_money(request: Request, receiver_username: str = Form(...), amount: flo
             result = cur.fetchone()
             print(f"DEBUG: Sender balance = {result}")
             if not result:
-                return HTMLResponse(f"<h1>Error</h1><p>Sender '{sender_username}' not found</p><a href='/wallet'>Back to Wallet</a>")
+                return templates.TemplateResponse("error.html", {"request": request, "message": f"Sender '{sender_username}' not found."})
             current_bal = result[0]
-            
-            if amount > current_bal:
-                return HTMLResponse(f"<h1>Error</h1><p>Limit exceeded. Balance: ₹{current_bal}, Amount: ₹{amount}</p><a href='/wallet'>Back to Wallet</a>")
-            
+
             if amount < 10:
-                return HTMLResponse(f"""
-                    <script>alert("Amount must be at least or more than ₹10"); window.location="/wallet?username={sender_username}";</script>
-                """)
+                return templates.TemplateResponse("error.html", {"request": request, "message": "Minimum transfer amount is ₹10."})
+
+            if amount > current_bal:
+                return templates.TemplateResponse("error.html", {"request": request, "message": f"Insufficient balance. Your balance is ₹{current_bal}."})
 
             # Platform fee
             platform_fee = amount * 0.015
             total_deduction = amount + platform_fee
 
             if total_deduction > current_bal:
-                return HTMLResponse(f"<h1>Error</h1><p>Insufficient balance. Need ₹{total_deduction} (Amount: ₹{amount} + Fee: ₹{platform_fee})</p><a href='/wallet'>Back to Wallet</a>")
+                return templates.TemplateResponse("error.html", {"request": request, "message": f"Insufficient balance after fee. Need ₹{total_deduction:.2f} (₹{amount} + ₹{platform_fee:.2f} fee). Your balance: ₹{current_bal}."})
 
             cur.execute("""
                 INSERT INTO platform_fee (sender_username, receiver_username, fee_amount, original_amount)
                 VALUES (%s, %s, %s, %s)
             """, (sender_username, receiver_username, platform_fee, amount))
-            
+
             print(f"DEBUG: Platform fee recorded")
 
             # Check receiver
             cur.execute("SELECT 1 FROM user_details WHERE username = %s", (receiver_username,))
             if not cur.fetchone():
-                return HTMLResponse(f"<h1>Error</h1><p>Receiver '{receiver_username}' not found</p><a href='/wallet'>Back to Wallet</a>")
-            
+                return templates.TemplateResponse("error.html", {"request": request, "message": f"User '{receiver_username}' not found."})
+
             # Update balances
             cur.execute("UPDATE user_details SET balance = balance - %s WHERE username = %s", (amount, sender_username))
             cur.execute("UPDATE user_details SET balance = balance + %s WHERE username = %s", (amount, receiver_username))
-            
+
             # Record transaction
             cur.execute("""
                 INSERT INTO transactions (sender_username, receiver_username, amount)
                 VALUES (%s, %s, %s)
             """, (sender_username, receiver_username, amount))
-            
+
             conn.commit()
             print(f"DEBUG: Transfer committed")
-            
+
             # Clear Redis cache
             rc(r.delete, f"balance:{sender_username}")
             rc(r.delete, f"balance:{receiver_username}")
-            
+
         except Exception as e:
             conn.rollback()
             print(f"DEBUG: Transfer failed, rolled back: {e}")
-            return HTMLResponse(f"<h1>Error</h1><p>Transfer failed: {str(e)}</p><a href='/wallet'>Back to Wallet</a>")
+            return templates.TemplateResponse("error.html", {"request": request, "message": f"Transfer failed: {str(e)}"})
     
     return RedirectResponse(url="/wallet", status_code=303)
 
