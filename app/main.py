@@ -27,11 +27,11 @@ app.include_router(login_router)
 
 # # schema DB config
 DB_CONFIG = {
-    "host": os.getenv("DB_HOST"),
-    "database": os.getenv("DB_NAME"),
-    "port": os.getenv("DB_PORT", "5432"),
-    "user": os.getenv("DB_USER"),
-    "password": os.getenv("DB_PASSWORD"),
+    "host": os.getenv("DB_HOST", "").strip(),
+    "database": os.getenv("DB_NAME", "").strip(),
+    "port": os.getenv("DB_PORT", "5432").strip(),
+    "user": os.getenv("DB_USER", "").strip(),
+    "password": os.getenv("DB_PASSWORD", "").strip(),
 }
 
 
