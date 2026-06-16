@@ -2,47 +2,195 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>My Wallet - Apex Ledger</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 40px auto; background-color: #f4f7f6; color: #333; }
-        .wallet-card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .balance-box { background: #2c3e50; color: #ecf0f1; padding: 20px; border-radius: 8px; text-align: center; margin-bottom: 30px; }
-        .balance-amount { font-size: 2.5em; font-weight: bold; display: block; }
-        
-        .transfer-section { border-top: 2px solid #eee; padding-top: 20px; }
-        input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; font-size: 1em; }
-        button { background: #e67e22; color: white; border: none; padding: 15px; border-radius: 6px; cursor: pointer; width: 100%; font-size: 1.1em; font-weight: bold; transition: background 0.3s; }
-        button:hover { background: #d35400; }
-        .back-link { display: block; text-align: center; margin-top: 20px; color: #7f8c8d; text-decoration: none; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 16px;
+            color: #333;
+        }
+
+        /* Navbar */
+        .navbar {
+            width: 100%;
+            max-width: 480px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 32px;
+        }
+        .navbar .logo {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #fff;
+            letter-spacing: 0.5px;
+        }
+        .navbar .logout {
+            font-size: 0.85rem;
+            color: rgba(255,255,255,0.6);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+        .navbar .logout:hover { color: #fff; }
+
+        /* Main card */
+        .card {
+            background: #fff;
+            border-radius: 20px;
+            width: 100%;
+            max-width: 480px;
+            overflow: hidden;
+            box-shadow: 0 25px 60px rgba(0,0,0,0.4);
+        }
+
+        /* Balance section */
+        .balance-section {
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            padding: 36px 32px;
+            color: #fff;
+        }
+        .balance-label {
+            font-size: 0.7rem;
+            font-weight: 600;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: rgba(255,255,255,0.5);
+            margin-bottom: 8px;
+        }
+        .balance-amount {
+            font-size: 2.8rem;
+            font-weight: 700;
+            letter-spacing: -1px;
+        }
+        .balance-amount span {
+            font-size: 1.8rem;
+            font-weight: 500;
+            margin-right: 2px;
+        }
+        .welcome-text {
+            margin-top: 20px;
+            font-size: 0.85rem;
+            color: rgba(255,255,255,0.45);
+        }
+        .welcome-text strong {
+            color: rgba(255,255,255,0.85);
+            font-weight: 600;
+        }
+
+        /* Transfer section */
+        .transfer-section {
+            padding: 32px;
+        }
+        .section-title {
+            font-size: 1rem;
+            font-weight: 700;
+            color: #1a1a2e;
+            margin-bottom: 4px;
+        }
+        .section-sub {
+            font-size: 0.8rem;
+            color: #9ca3af;
+            margin-bottom: 24px;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+        label {
+            display: block;
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 6px;
+            letter-spacing: 0.3px;
+        }
+        input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1.5px solid #e5e7eb;
+            border-radius: 10px;
+            font-size: 0.95rem;
+            font-family: 'Inter', sans-serif;
+            color: #1f2937;
+            transition: border-color 0.2s;
+            outline: none;
+            background: #f9fafb;
+        }
+        input:focus {
+            border-color: #302b63;
+            background: #fff;
+        }
+        input::placeholder { color: #d1d5db; }
+
+        .fee-note {
+            font-size: 0.75rem;
+            color: #9ca3af;
+            margin-top: -8px;
+            margin-bottom: 16px;
+        }
+
+        button {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #302b63, #24243e);
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            font-family: 'Inter', sans-serif;
+            cursor: pointer;
+            transition: opacity 0.2s, transform 0.1s;
+            margin-top: 4px;
+        }
+        button:hover { opacity: 0.9; }
+        button:active { transform: scale(0.99); }
     </style>
 </head>
 <body>
 
-    <div class="wallet-card">
-        <h2>Welcome, {{ username }}</h2>
-        
-        <div class="balance-box">
-            <span style="text-transform: uppercase; letter-spacing: 1px; font-size: 0.8em;">Available Balance</span>
-            <span class="balance-amount">₹{{ balance }}</span>
+    <nav class="navbar">
+        <span class="logo">⬡ Apex Ledger</span>
+        <a href="/" class="logout">Sign out →</a>
+    </nav>
+
+    <div class="card">
+        <div class="balance-section">
+            <div class="balance-label">Available Balance</div>
+            <div class="balance-amount"><span>₹</span>{{ "%.2f"|format(balance) }}</div>
+            <div class="welcome-text">Logged in as <strong>{{ username }}</strong></div>
         </div>
 
         <div class="transfer-section">
-            <h3>Send Money</h3>
-            <p style="font-size: 0.9em; color: #666;">Transfer funds instantly to another user.</p>
-            
+            <div class="section-title">Send Money</div>
+            <div class="section-sub">Transfer funds instantly to any user</div>
+
             <form action="/transfer" method="post">
                 <input type="hidden" name="idempotency_key" value="{{ idempotency_key }}">
-                <label for="receiver">Receiver Username:</label>
-                <input type="text" id="receiver" name="receiver_username" placeholder="e.g. simon_dev" required>
-                
-                <label for="amount">Amount (₹):</label>
-                <input type="number" id="amount" name="amount" min="1" step="0.01" placeholder="0.00" required>
-                
+
+                <div class="form-group">
+                    <label for="receiver">Recipient Username</label>
+                    <input type="text" id="receiver" name="receiver_username" placeholder="e.g. simon_dev" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="amount">Amount (₹)</label>
+                    <input type="number" id="amount" name="amount" min="10" step="0.01" placeholder="0.00" required>
+                </div>
+                <div class="fee-note">A 1.5% platform fee applies. Minimum transfer ₹10.</div>
+
                 <button type="submit">Confirm Transfer</button>
             </form>
         </div>
-
-        <a href="/" class="back-link">← Logout</a>
     </div>
 
 </body>

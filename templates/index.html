@@ -4,44 +4,95 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Apex Ledger</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        body {
+            font-family: 'Inter', sans-serif;
             min-height: 100vh;
+            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
             display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
+            padding: 24px;
+            color: #fff;
         }
-        .container { 
-            text-align: center; 
-            color: white;
-            padding: 40px;
+        .logo {
+            font-size: 0.85rem;
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: rgba(255,255,255,0.5);
+            margin-bottom: 24px;
         }
-        h1 { font-size: 3em; margin-bottom: 10px; }
-        p { font-size: 1.2em; margin-bottom: 40px; opacity: 0.9; }
-        .btn { 
-            display: inline-block;
-            padding: 15px 40px; 
-            margin: 10px; 
-            border-radius: 30px; 
-            text-decoration: none;
+        h1 {
+            font-size: 3rem;
+            font-weight: 800;
+            letter-spacing: -1.5px;
+            margin-bottom: 16px;
+            text-align: center;
+        }
+        p {
+            font-size: 1rem;
+            color: rgba(255,255,255,0.55);
+            margin-bottom: 48px;
+            text-align: center;
+            max-width: 340px;
+            line-height: 1.6;
+        }
+        .buttons { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+        .btn {
+            padding: 14px 36px;
+            border-radius: 10px;
+            font-size: 0.95rem;
             font-weight: 600;
-            font-size: 1.1em;
-            transition: transform 0.2s, box-shadow 0.2s;
+            font-family: 'Inter', sans-serif;
+            text-decoration: none;
+            transition: opacity 0.2s, transform 0.1s;
         }
-        .btn-primary { background: white; color: #667eea; }
-        .btn-secondary { background: transparent; color: white; border: 2px solid white; }
-        .btn:hover { transform: translateY(-3px); box-shadow: 0 10px 20px rgba(0,0,0,0.3); }
+        .btn:active { transform: scale(0.98); }
+        .btn-primary {
+            background: #fff;
+            color: #1a1a2e;
+        }
+        .btn-secondary {
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+            border: 1.5px solid rgba(255,255,255,0.2);
+        }
+        .btn:hover { opacity: 0.85; }
+        .tags {
+            display: flex;
+            gap: 10px;
+            margin-top: 56px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .tag {
+            font-size: 0.72rem;
+            font-weight: 500;
+            color: rgba(255,255,255,0.35);
+            background: rgba(255,255,255,0.06);
+            padding: 6px 12px;
+            border-radius: 20px;
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Apex Ledger</h1>
-        <p>Secure payments with Redis caching & JWT authentication</p>
+    <div class="logo">⬡ Apex Ledger</div>
+    <h1>Send Money,<br>Instantly.</h1>
+    <p>Secure peer-to-peer transfers with JWT auth, Redis caching, and real-time balance updates.</p>
+    <div class="buttons">
         <a href="/login" class="btn btn-primary">Login</a>
-        <a href="/signup" class="btn btn-secondary">Sign Up</a>
+        <a href="/signup" class="btn btn-secondary">Create Account</a>
+    </div>
+    <div class="tags">
+        <span class="tag">FastAPI</span>
+        <span class="tag">PostgreSQL</span>
+        <span class="tag">Redis</span>
+        <span class="tag">Docker</span>
+        <span class="tag">JWT Auth</span>
     </div>
 </body>
 </html>

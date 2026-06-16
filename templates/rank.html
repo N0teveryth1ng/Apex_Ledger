@@ -2,24 +2,108 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Leaderboard - Apex Ledger</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 40px auto; background-color: #f4f7f6; color: #333; }
-        .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        h1 { text-align: center; color: #2c3e50; margin-bottom: 30px; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
-        th { background: #2c3e50; color: white; }
-        tr:hover { background: #f5f5f5; }
-        .rank { font-weight: bold; color: #e67e22; }
-        .back-link { display: block; text-align: center; margin-top: 20px; color: #7f8c8d; text-decoration: none; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', sans-serif;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 16px;
+        }
+        .navbar {
+            width: 100%;
+            max-width: 520px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 32px;
+        }
+        .logo {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #fff;
+        }
+        .back {
+            font-size: 0.85rem;
+            color: rgba(255,255,255,0.55);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+        .back:hover { color: #fff; }
+        .card {
+            background: #fff;
+            border-radius: 20px;
+            width: 100%;
+            max-width: 520px;
+            overflow: hidden;
+            box-shadow: 0 25px 60px rgba(0,0,0,0.4);
+        }
+        .card-header {
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            padding: 28px 32px;
+            color: #fff;
+        }
+        .card-header h1 {
+            font-size: 1.3rem;
+            font-weight: 700;
+        }
+        .card-header p {
+            font-size: 0.8rem;
+            color: rgba(255,255,255,0.45);
+            margin-top: 4px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        thead th {
+            padding: 14px 24px;
+            text-align: left;
+            font-size: 0.72rem;
+            font-weight: 600;
+            letter-spacing: 0.8px;
+            text-transform: uppercase;
+            color: #9ca3af;
+            background: #f9fafb;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        tbody td {
+            padding: 16px 24px;
+            font-size: 0.9rem;
+            color: #374151;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        tbody tr:last-child td { border-bottom: none; }
+        tbody tr:hover { background: #fafafa; }
+        .rank-num {
+            font-weight: 700;
+            color: #1a1a2e;
+            font-size: 0.85rem;
+        }
+        .rank-1 { color: #f59e0b; }
+        .rank-2 { color: #9ca3af; }
+        .rank-3 { color: #b45309; }
+        .username { font-weight: 500; }
+        .balance { font-weight: 600; color: #1a1a2e; }
     </style>
 </head>
 <body>
+    <nav class="navbar">
+        <span class="logo">⬡ Apex Ledger</span>
+        <a href="/wallet" class="back">← Back to Wallet</a>
+    </nav>
 
     <div class="card">
-        <h1>🏆 Leaderboard</h1>
-        
+        <div class="card-header">
+            <h1>Leaderboard</h1>
+            <p>Ranked by account balance</p>
+        </div>
         <table>
             <thead>
                 <tr>
@@ -31,16 +115,13 @@
             <tbody>
                 {% for item in rankings %}
                 <tr>
-                    <td class="rank">#{{ loop.index }}</td>
-                    <td>{{ item[0] }}</td>
-                    <td>{{ item[1] }}</td>
+                    <td class="rank-num {% if loop.index == 1 %}rank-1{% elif loop.index == 2 %}rank-2{% elif loop.index == 3 %}rank-3{% endif %}">#{{ loop.index }}</td>
+                    <td class="username">{{ item[0] }}</td>
+                    <td class="balance">{{ "%.2f"|format(item[1]) }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
-
-        <a href="/" class="back-link">← Back to Home</a>
     </div>
-
 </body>
 </html>
